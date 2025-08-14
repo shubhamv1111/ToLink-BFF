@@ -27,6 +27,13 @@ export class UrlResponseDto {
   customAlias?: string;
 
   @ApiProperty({
+    description: 'Optional name/title for the link',
+    example: 'My Google Homepage Link',
+    required: false,
+  })
+  name?: string;
+
+  @ApiProperty({
     description: 'Number of times the URL has been clicked',
     example: 0,
   })

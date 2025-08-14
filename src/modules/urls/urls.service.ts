@@ -26,8 +26,11 @@ export class UrlsService {
   /**
    * Shorten a long URL with collision detection and retry logic
    */
-  async shortenUrl(createUrlDto: CreateUrlDto): Promise<UrlResponseDto> {
-    const { originalUrl, customAlias } = createUrlDto;
+  async shortenUrl(
+    createUrlDto: CreateUrlDto,
+    userId?: string,
+  ): Promise<UrlResponseDto> {
+    const { originalUrl, customAlias, name } = createUrlDto;
 
     // Validate URL format
     if (!this.isValidUrl(originalUrl)) {
@@ -64,7 +67,9 @@ export class UrlsService {
       const response: UrlResponseDto = {
         shortCode: existingUrl.shortCode,
         originalUrl: existingUrl.originalUrl,
-        shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/${existingUrl.shortCode}`,
+        shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/r/${existingUrl.shortCode}`,
+        customAlias: existingUrl.customAlias,
+        name: existingUrl.name,
         clickCount: existingUrl.clickCount,
         createdAt: existingUrl.createdAt,
       };
@@ -79,6 +84,8 @@ export class UrlsService {
       shortCode,
       originalUrl,
       customAlias: customAlias || null,
+      name: name || null,
+      userId: userId || null,
       clickCount: 0,
     });
 
@@ -87,7 +94,9 @@ export class UrlsService {
     const response: UrlResponseDto = {
       shortCode: savedUrl.shortCode,
       originalUrl: savedUrl.originalUrl,
-      shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/${savedUrl.shortCode}`,
+      shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/r/${savedUrl.shortCode}`,
+      customAlias: savedUrl.customAlias,
+      name: savedUrl.name,
       clickCount: savedUrl.clickCount,
       createdAt: savedUrl.createdAt,
     };
@@ -148,7 +157,9 @@ export class UrlsService {
       const cacheData: UrlResponseDto = {
         shortCode: url.shortCode,
         originalUrl: url.originalUrl,
-        shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/${url.shortCode}`,
+        shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/r/${url.shortCode}`,
+        customAlias: url.customAlias,
+        name: url.name,
         clickCount: url.clickCount,
         createdAt: url.createdAt,
       };
@@ -229,7 +240,9 @@ export class UrlsService {
     const response: UrlResponseDto = {
       shortCode: freshUrl.shortCode,
       originalUrl: freshUrl.originalUrl,
-      shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/${freshUrl.shortCode}`,
+      shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/r/${freshUrl.shortCode}`,
+      customAlias: freshUrl.customAlias,
+      name: freshUrl.name,
       clickCount: freshUrl.clickCount,
       createdAt: freshUrl.createdAt,
     };

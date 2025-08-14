@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type UrlDocument = Url & Document;
 
@@ -14,6 +14,24 @@ export class Url {
   @Prop({ unique: true, sparse: true })
   customAlias?: string;
 
+  @Prop()
+  name?: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', index: true })
+  userId?: Types.ObjectId;
+
+  @Prop()
+  password?: string; // Hashed password for protected links
+
+  @Prop()
+  expiresAt?: Date;
+
+  @Prop({ default: true })
+  isActive: boolean;
+
+  @Prop([String])
+  tags?: string[];
+
   @Prop({ default: 0 })
   clickCount: number;
 
@@ -25,3 +43,9 @@ export class Url {
 }
 
 export const UrlSchema = SchemaFactory.createForClass(Url);
+
+// Create additional indexes for Phase 2
+UrlSchema.index({ userId: 1, createdAt: -1 });
+UrlSchema.index({ expiresAt: 1 });
+UrlSchema.index({ isActive: 1 });
+UrlSchema.index({ tags: 1 });

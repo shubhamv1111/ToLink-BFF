@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
@@ -29,15 +29,17 @@ async function bootstrap() {
     }),
   );
 
+  // Global API prefix aligned with Plan.md: /v1
+  app.setGlobalPrefix('v1', {
+    exclude: [{ path: 'r/(.*)', method: RequestMethod.ALL }],
+  });
+
   // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('ToLink URL Shortener')
-    .setDescription(
-      'A powerful URL shortener API with analytics and QR code generation',
-    )
+    .setDescription('A powerful URL shortener API')
     .setVersion('1.0')
     .addTag('URLs', 'URL shortening operations')
-    .addTag('QR Codes', 'QR code generation')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

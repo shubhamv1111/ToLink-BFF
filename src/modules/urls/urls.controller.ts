@@ -8,6 +8,8 @@ import {
   HttpStatus,
   BadRequestException,
   NotFoundException,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,44 +18,16 @@ import {
   ApiBody,
   ApiParam,
   ApiProperty,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { UrlsService } from './urls.service';
 import { CreateUrlDto } from './dto/create-url.dto';
 import { UrlResponseDto } from './dto/url-response.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UserDocument } from '../../schemas/user.schema';
 
 // Swagger response examples
-class HealthStatsDto {
-  @ApiProperty({
-    example: 150,
-    description: 'Total number of URLs shortened',
-  })
-  totalUrls: number;
-
-  @ApiProperty({
-    example: 2847,
-    description: 'Total number of redirections/clicks',
-  })
-  totalClicks: number;
-
-  @ApiProperty({
-    example: 25,
-    description: 'Number of URLs cached in memory',
-  })
-  cacheSize: number;
-
-  @ApiProperty({
-    example: {
-      totalPossible: '3521614606208',
-      humanReadable: '3.5T',
-    },
-    description: 'Base62 encoding capacity statistics',
-  })
-  base62Stats: {
-    totalPossible: string;
-    humanReadable: string;
-  };
-}
 
 class RedirectResponseDto {
   @ApiProperty({
@@ -84,11 +58,11 @@ class ErrorResponseDto {
 }
 
 @ApiTags('URLs')
-@Controller('api')
+@Controller('links')
 export class UrlsController {
   constructor(private readonly urlsService: UrlsService) {}
 
-  @Post('shorten')
+  @Post()
   @ApiOperation({
     summary: 'Shorten a long URL',
     description: `
@@ -198,8 +172,13 @@ export class UrlsController {
   })
   async shortenUrl(
     @Body() createUrlDto: CreateUrlDto,
+    @Req() req: Request,
   ): Promise<UrlResponseDto> {
-    return this.urlsService.shortenUrl(createUrlDto);
+    // Check if user is authenticated (optional)
+    const user = req.user as UserDocument | undefined;
+    const userId = user?._id as string | undefined;
+
+    return this.urlsService.shortenUrl(createUrlDto, userId);
   }
 
   @Get('stats/:shortCode')
@@ -291,70 +270,14 @@ export class UrlsController {
   ): Promise<UrlResponseDto> {
     return this.urlsService.getUrlStats(shortCode);
   }
-
-  @Get('health')
-  @ApiOperation({
-    summary: 'Get system health and statistics',
-    description: `
-    Provides comprehensive system health information including:
-    
-    **Database Statistics:**
-    - Total number of URLs shortened
-    - Total number of redirections (clicks)
-    
-    **Performance Metrics:**
-    - Current cache size and hit ratio
-    - System capacity information
-    
-    **Base62 Encoding Stats:**
-    - Total possible combinations with current encoding length
-    - Human-readable capacity information
-    
-    This endpoint is useful for monitoring system performance and capacity planning.
-    `,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'System health statistics',
-    type: HealthStatsDto,
-    examples: {
-      'Healthy system': {
-        summary: 'System with moderate usage',
-        value: {
-          totalUrls: 1543,
-          totalClicks: 28794,
-          cacheSize: 127,
-          base62Stats: {
-            totalPossible: '3521614606208',
-            humanReadable: '3.5T',
-          },
-        },
-      },
-      'New system': {
-        summary: 'Recently deployed system',
-        value: {
-          totalUrls: 12,
-          totalClicks: 45,
-          cacheSize: 8,
-          base62Stats: {
-            totalPossible: '3521614606208',
-            humanReadable: '3.5T',
-          },
-        },
-      },
-    },
-  })
-  async getHealth(): Promise<HealthStatsDto> {
-    return this.urlsService.getHealthStats();
-  }
 }
 
-@Controller()
+@ApiTags('Redirection')
+@Controller('r')
 export class RedirectController {
   constructor(private readonly urlsService: UrlsService) {}
 
   @Get(':shortCode')
-  @ApiTags('Redirection')
   @ApiOperation({
     summary: 'Redirect to original URL',
     description: `

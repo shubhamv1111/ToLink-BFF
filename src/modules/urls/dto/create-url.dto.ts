@@ -21,4 +21,16 @@ export class CreateUrlDto {
     message: 'Custom alias must be between 3 and 50 characters',
   })
   customAlias?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional name/title for the link to help remember it',
+    example: 'My Google Homepage Link',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100, {
+    message: 'Name must be between 1 and 100 characters',
+  })
+  name?: string;
 }

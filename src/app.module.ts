@@ -5,7 +5,7 @@ import { APP_PIPE } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UrlsModule } from './modules/urls/urls.module';
-import { QrModule } from './modules/qr/qr.module';
+import { AuthModule } from './modules/auth/auth.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -26,8 +26,8 @@ import configuration from './config/configuration';
     }),
 
     // Feature modules
+    AuthModule,
     UrlsModule,
-    QrModule,
   ],
   controllers: [AppController],
   providers: [
