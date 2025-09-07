@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { Request } from 'express';
 import { User, UserDocument } from '../../../schemas/user.schema';
 
 export interface JwtPayload {
@@ -20,8 +21,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {
+    // Extract JWT from httpOnly cookie first, then fall back to Authorization header
+    const cookieExtractor = (req: Request): string | null => {
+      if (req && (req as any).cookies && (req as any).cookies['tolink_session']) {
+        return (req as any).cookies['tolink_session'];
+      }
+      return null;
+    };
+
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        cookieExtractor,
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET') || 'your-secret-key',
     });

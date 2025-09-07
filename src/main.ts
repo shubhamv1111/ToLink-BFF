@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -16,9 +17,13 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://127.0.0.1:3000',
     ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   });
+
+  // Parse cookies for httpOnly JWT session
+  app.use(cookieParser());
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -31,7 +36,7 @@ async function bootstrap() {
 
   // Global API prefix aligned with Plan.md: /v1
   app.setGlobalPrefix('v1', {
-    exclude: [{ path: 'r/(.*)', method: RequestMethod.ALL }],
+    exclude: [{ path: 'r/:shortCode', method: RequestMethod.ALL }],
   });
 
   // Swagger configuration
@@ -39,7 +44,11 @@ async function bootstrap() {
     .setTitle('ToLink URL Shortener')
     .setDescription('A powerful URL shortener API')
     .setVersion('1.0')
+    .addTag('App', 'App info and root')
+    .addTag('Authentication', 'Cookie-based auth endpoints')
     .addTag('URLs', 'URL shortening operations')
+    .addTag('Redirection', 'Public redirection endpoint')
+    .addCookieAuth('tolink_session')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UserResponseDto {
   @ApiProperty({
@@ -18,6 +18,12 @@ export class UserResponseDto {
     example: 'john.doe@example.com',
   })
   email: string;
+
+  @ApiPropertyOptional({
+    description: 'User profile photo URL',
+    example: 'https://example.com/photo.jpg',
+  })
+  profilePhoto?: string | null;
 
   @ApiProperty({
     description: 'User role',

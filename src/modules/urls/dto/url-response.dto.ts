@@ -1,11 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UrlResponseDto {
   @ApiProperty({
-    description: 'The generated short code',
-    example: '0000001',
+    description: 'The link ID',
+    example: '507f1f77bcf86cd799439011',
   })
-  shortCode: string;
+  id: string;
 
   @ApiProperty({
     description: 'The original URL',
@@ -14,34 +14,68 @@ export class UrlResponseDto {
   originalUrl: string;
 
   @ApiProperty({
+    description: 'The generated short code',
+    example: 'aB3xY7z',
+  })
+  shortCode: string;
+
+  @ApiProperty({
     description: 'The complete short URL',
-    example: 'http://localhost:8080/0000001',
+    example: 'http://localhost:8080/r/aB3xY7z',
   })
   shortUrl: string;
 
   @ApiProperty({
-    description: 'Custom alias if provided',
-    example: 'my-custom-link',
-    required: false,
+    description: 'Number of clicks',
+    example: 123,
   })
-  customAlias?: string;
+  clicks: number;
 
   @ApiProperty({
-    description: 'Optional name/title for the link',
-    example: 'My Google Homepage Link',
-    required: false,
-  })
-  name?: string;
-
-  @ApiProperty({
-    description: 'Number of times the URL has been clicked',
-    example: 0,
-  })
-  clickCount: number;
-
-  @ApiProperty({
-    description: 'When the URL was created',
+    description: 'When the link was created',
     example: '2024-01-01T00:00:00.000Z',
   })
-  createdAt: Date;
+  createdAt: string;
+
+  @ApiPropertyOptional({
+    description: 'When the link was last clicked',
+    example: '2024-01-15T10:30:00.000Z',
+  })
+  lastClicked?: string;
+
+  @ApiProperty({
+    description: 'Whether the link is private',
+    example: false,
+  })
+  isPrivate: boolean;
+
+  @ApiProperty({
+    description: 'Whether the link has password protection',
+    example: false,
+  })
+  hasPassword: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Optional name/title for the link',
+    example: 'My Important Link',
+  })
+  urlName?: string;
+
+  @ApiPropertyOptional({
+    description: 'When the link becomes active',
+    example: '2025-01-18T13:00:00.000Z',
+  })
+  activationAt?: string;
+
+  @ApiPropertyOptional({
+    description: 'When the link expires',
+    example: '2025-02-01T00:00:00.000Z',
+  })
+  expiresAt?: string;
+
+  @ApiProperty({
+    description: 'Whether the link is enabled',
+    example: true,
+  })
+  enabled: boolean;
 }

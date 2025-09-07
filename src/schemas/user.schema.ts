@@ -15,10 +15,16 @@ export class User {
   passwordHash?: string;
 
   @Prop()
+  profilePhoto?: string; // Added per Plan.md
+
+  @Prop()
   googleId?: string;
 
   @Prop({ default: false })
   isEmailVerified: boolean;
+
+  @Prop()
+  emailVerifiedAt?: Date; // Added per Plan.md
 
   @Prop({ default: 'user', enum: ['user', 'admin'] })
   role: string;
@@ -43,12 +49,13 @@ export class User {
 
   @Prop()
   lastLogin?: Date;
+
+  // Optional OAuth provider metadata
+  @Prop({ type: Object })
+  providers?: any;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Create indexes
-UserSchema.index({ email: 1 });
-UserSchema.index({ googleId: 1 });
-UserSchema.index({ emailVerificationToken: 1 });
-UserSchema.index({ passwordResetToken: 1 });
+// Create indexes as per Plan.md
+UserSchema.index({ email: 1 }, { unique: true });

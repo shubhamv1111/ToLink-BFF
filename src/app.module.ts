@@ -6,6 +6,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UrlsModule } from './modules/urls/urls.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { UsersModule } from './modules/users/users.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -28,6 +30,8 @@ import configuration from './config/configuration';
     // Feature modules
     AuthModule,
     UrlsModule,
+    AnalyticsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

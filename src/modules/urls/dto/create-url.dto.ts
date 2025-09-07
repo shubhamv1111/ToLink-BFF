@@ -1,4 +1,12 @@
-import { IsUrl, IsOptional, IsString, Length } from 'class-validator';
+import {
+  IsUrl,
+  IsOptional,
+  IsString,
+  IsBoolean,
+  IsDateString,
+  Length,
+  Matches,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateUrlDto {
@@ -10,27 +18,80 @@ export class CreateUrlDto {
   originalUrl: string;
 
   @ApiPropertyOptional({
-    description: 'Custom alias for the short URL (optional)',
-    example: 'my-custom-link',
-    minLength: 3,
-    maxLength: 50,
-  })
-  @IsOptional()
-  @IsString()
-  @Length(3, 50, {
-    message: 'Custom alias must be between 3 and 50 characters',
-  })
-  customAlias?: string;
-
-  @ApiPropertyOptional({
-    description: 'Optional name/title for the link to help remember it',
-    example: 'My Google Homepage Link',
+    description: 'Optional name/title for the link',
+    example: 'My Important Link',
     maxLength: 100,
   })
   @IsOptional()
   @IsString()
   @Length(1, 100, {
-    message: 'Name must be between 1 and 100 characters',
+    message: 'URL name must be between 1 and 100 characters',
   })
-  name?: string;
+  urlName?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Custom alias for the short URL (3-32 chars, alphanumeric and hyphens only)',
+    example: 'my-custom-link',
+    minLength: 3,
+    maxLength: 32,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(3, 32, {
+    message: 'Custom alias must be between 3 and 32 characters',
+  })
+  @Matches(/^[a-z0-9-]+$/, {
+    message:
+      'Custom alias can only contain lowercase letters, numbers, and hyphens',
+  })
+  customAlias?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Whether the link is private (requires authentication to access)',
+    example: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isPrivate?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Whether the link has password protection',
+    example: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  hasPassword?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Password for the link (required if hasPassword is true)',
+    example: 'demo123',
+    minLength: 4,
+    maxLength: 128,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(4, 128, {
+    message: 'Password must be between 4 and 128 characters',
+  })
+  password?: string;
+
+  @ApiPropertyOptional({
+    description: 'When the link becomes active (ISO date string)',
+    example: '2025-01-18T13:00:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  activationAt?: string;
+
+  @ApiPropertyOptional({
+    description: 'When the link expires (ISO date string)',
+    example: '2025-02-01T00:00:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string;
 }

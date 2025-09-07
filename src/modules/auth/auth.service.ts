@@ -8,8 +8,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { User, UserDocument } from '../../schemas/user.schema';
+import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto, UserResponseDto } from './dto/user-response.dto';
@@ -21,6 +23,7 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -48,6 +51,13 @@ export class AuthService {
     });
 
     const savedUser = await user.save();
+
+    // Send welcome email (non-blocking)
+    this.emailService
+      .sendWelcomeEmail(savedUser.email, savedUser.name)
+      .catch((error) => {
+        console.error('Failed to send welcome email:', error);
+      });
 
     // Generate JWT token
     const payload: JwtPayload = {
@@ -238,5 +248,77 @@ export class AuthService {
     });
 
     return user.save();
+  }
+
+  /**
+   * Forgot password - Generate reset token and send email
+   */
+  async forgotPassword(email: string): Promise<void> {
+    // Always return success to prevent email enumeration
+    const user = await this.userModel.findOne({ email }).exec();
+    if (!user) {
+      // Don't reveal if email exists or not
+      return;
+    }
+
+    // Generate secure reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    // Set reset token and expiry (1 hour)
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+
+    // Send password reset email
+    try {
+      await this.emailService.sendPasswordResetEmail(
+        user.email,
+        user.name,
+        resetToken,
+      );
+    } catch (error) {
+      // If email fails, still log the token for backup access
+      console.log(`Email failed, reset token for ${email}: ${resetToken}`);
+    }
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    // Hash the provided token to match stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid reset token
+    const user = await this.userModel
+      .findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: new Date() },
+      })
+      .exec();
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user password and clear reset token
+    user.passwordHash = passwordHash;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    user.updatedAt = new Date();
+    await user.save();
+
+    return { message: 'Password reset successfully' };
   }
 }
