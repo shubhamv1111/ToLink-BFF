@@ -32,6 +32,7 @@ import { UrlResponseDto } from './dto/url-response.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
 import { LinkListResponseDto, LinkListQueryDto } from './dto/link-list.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { UserDocument } from '../../schemas/user.schema';
 
@@ -71,6 +72,7 @@ export class UrlsController {
   constructor(private readonly urlsService: UrlsService) {}
 
   @Post()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Shorten a long URL',
     description: `
