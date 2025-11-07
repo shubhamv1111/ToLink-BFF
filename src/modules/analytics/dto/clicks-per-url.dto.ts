@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsEnum } from 'class-validator';
 import { ClickSeriesDataPointDto } from './clicks-series.dto';
 
 export class ClicksPerUrlDto {
@@ -30,5 +31,7 @@ export class ClicksPerUrlQueryDto {
     example: '30d',
     default: '30d',
   })
+  @IsOptional()
+  @IsEnum(['7d', '30d', '90d', 'all'])
   range?: string;
 }

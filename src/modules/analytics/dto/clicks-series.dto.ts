@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsEnum, IsString } from 'class-validator';
 
 export class ClickSeriesDataPointDto {
   @ApiProperty({
@@ -26,12 +27,16 @@ export class ClicksSeriesQueryDto {
     example: 'user',
     default: 'user',
   })
+  @IsOptional()
+  @IsEnum(['user', 'link'])
   scope?: string;
 
   @ApiPropertyOptional({
     description: 'Link ID (required when scope=link)',
     example: '507f1f77bcf86cd799439011',
   })
+  @IsOptional()
+  @IsString()
   linkId?: string;
 
   @ApiPropertyOptional({
@@ -40,6 +45,8 @@ export class ClicksSeriesQueryDto {
     example: 'day',
     default: 'day',
   })
+  @IsOptional()
+  @IsEnum(['day'])
   granularity?: string;
 
   @ApiPropertyOptional({
@@ -48,5 +55,7 @@ export class ClicksSeriesQueryDto {
     example: '30d',
     default: '30d',
   })
+  @IsOptional()
+  @IsEnum(['7d', '30d', '90d', 'all'])
   range?: string;
 }
