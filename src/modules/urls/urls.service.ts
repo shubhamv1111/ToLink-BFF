@@ -606,14 +606,19 @@ export class UrlsService {
       if (!this.isValidUrl(updateDto.originalUrl)) {
         throw new BadRequestException('Invalid URL format');
       }
-      updateDto.originalUrl = this.sanitizeUrl(updateDto.originalUrl);
+      url.originalUrl = this.sanitizeUrl(updateDto.originalUrl);
     }
 
-    // Update other fields
-    Object.assign(url, {
-      ...updateDto,
-      updatedAt: new Date(),
-    });
+    // Update only valid schema fields (exclude control flags like password, forceActivate, etc.)
+    if (updateDto.urlName !== undefined) url.urlName = updateDto.urlName;
+    if (updateDto.isPrivate !== undefined) url.isPrivate = updateDto.isPrivate;
+    if (updateDto.enabled !== undefined) url.enabled = updateDto.enabled;
+    if (updateDto.activationAt !== undefined)
+      url.activationAt = new Date(updateDto.activationAt);
+    if (updateDto.expiresAt !== undefined)
+      url.expiresAt = new Date(updateDto.expiresAt);
+
+    url.updatedAt = new Date();
 
     await url.save();
 
