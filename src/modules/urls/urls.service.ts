@@ -10,6 +10,11 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { Url, UrlDocument } from '../../schemas/url.schema';
+import { Clicks, ClicksDocument } from '../../schemas/analytics.schema';
+import {
+  DailyLinkStats,
+  DailyLinkStatsDocument,
+} from '../../schemas/daily-link-stats.schema';
 import { CreateUrlDto } from './dto/create-url.dto';
 import { UrlResponseDto } from './dto/url-response.dto';
 import { UpdateLinkDto } from './dto/update-link.dto';
@@ -25,7 +30,12 @@ export class UrlsService {
   private readonly SHORT_CODE_LENGTH = 7;
   private readonly MAX_COLLISION_RETRIES = 10;
 
-  constructor(@InjectModel(Url.name) private urlModel: Model<Url>) {}
+  constructor(
+    @InjectModel(Url.name) private urlModel: Model<Url>,
+    @InjectModel(Clicks.name) private clicksModel: Model<ClicksDocument>,
+    @InjectModel(DailyLinkStats.name)
+    private dailyStatsModel: Model<DailyLinkStatsDocument>,
+  ) {}
 
   /**
    * Shorten a long URL with collision detection and retry logic
@@ -999,14 +1009,33 @@ export class UrlsService {
         ip: locationInfo.ip,
       });
 
-      // TODO: In full implementation, save to clicks collection:
-      // await this.clicksModel.create(clickData);
+      // Save to clicks collection
+      await this.clicksModel.create(clickData);
 
-      // TODO: Update daily aggregates:
-      // await this.updateDailyStats(url._id, new Date());
+      // Update daily aggregates
+      await this.updateDailyStats(url._id, new Date());
     } catch (error) {
       console.error('❌ Error recording click analytics:', error);
       // Continue execution - analytics failure shouldn't break redirect
+    }
+  }
+
+  /**
+   * Update daily aggregated stats
+   */
+  private async updateDailyStats(linkId: any, clickDate: Date): Promise<void> {
+    try {
+      const dateStr = clickDate.toISOString().split('T')[0];
+      const date = new Date(dateStr);
+
+      // Upsert daily stats (increment clicks or create new record)
+      await this.dailyStatsModel.updateOne(
+        { linkId, date },
+        { $inc: { clicks: 1 }, $set: { linkId, date } },
+        { upsert: true },
+      );
+    } catch (error) {
+      console.error('Error updating daily stats:', error);
     }
   }
 }
