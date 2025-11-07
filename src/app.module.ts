@@ -8,6 +8,7 @@ import { UrlsModule } from './modules/urls/urls.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { UsersModule } from './modules/users/users.module';
+import { QrModule } from './modules/qr/qr.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -32,6 +33,7 @@ import configuration from './config/configuration';
     UrlsModule,
     AnalyticsModule,
     UsersModule,
+    QrModule,
   ],
   controllers: [AppController],
   providers: [
