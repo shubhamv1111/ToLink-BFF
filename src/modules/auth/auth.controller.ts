@@ -21,12 +21,14 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
 import { UserDocument } from '../../schemas/user.schema';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { Req } from '@nestjs/common';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -222,5 +224,47 @@ export class AuthController {
     @Body() dto: { token: string; newPassword: string },
   ): Promise<{ message: string }> {
     return this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({
+    summary: 'Login with Google',
+    description: 'Redirects to Google OAuth login page',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirects to Google OAuth',
+  })
+  async googleAuth() {
+    // Guard handles the redirect
+  }
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({
+    summary: 'Google OAuth callback',
+    description: 'Handles callback from Google OAuth',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully authenticated with Google',
+    type: UserResponseDto,
+  })
+  async googleAuthCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const user = req.user as any;
+    
+    // Find or create user with Google info
+    const { token, user: userData } = await this.authService.googleLogin(user);
+    
+    // Set session cookie
+    this.setSessionCookie(res, token);
+    
+    // Redirect to frontend dashboard
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/dashboard`);
   }
 }

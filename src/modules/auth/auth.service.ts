@@ -321,4 +321,50 @@ export class AuthService {
 
     return { message: 'Password reset successfully' };
   }
+
+  /**
+   * Google OAuth login/signup
+   */
+  async googleLogin(googleUser: {
+    googleId: string;
+    email: string;
+    name: string;
+    profilePhoto?: string;
+  }): Promise<AuthResponseDto> {
+    // Try to find user by email
+    let user = await this.userModel.findOne({ email: googleUser.email }).exec();
+
+    if (user) {
+      // Update Google ID and profile photo if not set
+      if (!user.googleId) {
+        user.googleId = googleUser.googleId;
+      }
+      if (googleUser.profilePhoto && !user.profilePhoto) {
+        user.profilePhoto = googleUser.profilePhoto;
+      }
+      await user.save();
+    } else {
+      // Create new user
+      user = new this.userModel({
+        name: googleUser.name,
+        email: googleUser.email,
+        googleId: googleUser.googleId,
+        profilePhoto: googleUser.profilePhoto,
+        isEmailVerified: true, // Google-verified emails are considered verified
+      });
+      await user.save();
+    }
+
+    // Generate JWT token
+    const payload: JwtPayload = {
+      sub: user._id.toString(),
+      email: user.email,
+    };
+    const token = this.jwtService.sign(payload);
+
+    return {
+      token,
+      user: this.transformUserToResponse(user),
+    };
+  }
 }
