@@ -115,6 +115,8 @@ export class UsersService {
       isActive: user.isActive,
       createdAt: user.createdAt,
       lastLogin: user.lastLogin,
+      isGoogleAccount: !!user.googleId,
+      hasPassword: !!user.passwordHash,
     };
   }
 
