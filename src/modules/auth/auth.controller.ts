@@ -258,10 +258,10 @@ export class AuthController {
     const user = req.user as any;
     
     // Find or create user with Google info
-    const { token, user: userData } = await this.authService.googleLogin(user);
+    const { accessToken, user: userData } = await this.authService.googleLogin(user);
     
     // Set session cookie
-    this.setSessionCookie(res, token);
+    this.setSessionCookie(res, accessToken);
     
     // Redirect to frontend dashboard
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
