@@ -22,7 +22,7 @@ export default () => ({
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackUrl:
       process.env.GOOGLE_CALLBACK_URL ||
-      `${process.env.BASE_URL || 'http://localhost:8080'}/auth/google/callback`,
+      `${process.env.BASE_URL || 'http://localhost:8080'}/v1/auth/google/callback`,
   },
   environment: process.env.NODE_ENV || 'development',
 });
