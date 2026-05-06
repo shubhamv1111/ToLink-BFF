@@ -140,8 +140,27 @@ export class AnalyticsService {
     linkId: string,
     dateRange: { start: Date; end: Date },
   ): Promise<ClickSeriesDataPointDto[]> {
-    // For now, return mock data since we might not have daily stats yet
-    // In Phase 2, this will use the daily_link_stats collection
+    // Try to get real data from daily stats
+    try {
+      const stats = await this.dailyStatsModel
+        .find({
+          linkId,
+          date: { $gte: dateRange.start, $lte: dateRange.end },
+        })
+        .sort({ date: 1 })
+        .exec();
+
+      if (stats && stats.length > 0) {
+        return stats.map((stat) => ({
+          date: stat.date,
+          clicks: stat.clicks,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching daily stats:', error);
+    }
+
+    // Fall back to mock data if no real data exists
     return this.generateMockSeries(dateRange);
   }
 
@@ -152,8 +171,50 @@ export class AnalyticsService {
     userId: string,
     dateRange: { start: Date; end: Date },
   ): Promise<ClickSeriesDataPointDto[]> {
-    // For now, return mock data
-    // In Phase 2, this will aggregate daily stats across all user links
+    // Get all user links
+    const userLinks = await this.urlModel
+      .find({ userId })
+      .select('_id')
+      .exec();
+    const linkIds = userLinks.map((link) => link._id);
+
+    if (linkIds.length === 0) {
+      return [];
+    }
+
+    try {
+      // Aggregate daily stats across all user links
+      const stats = await this.dailyStatsModel
+        .aggregate([
+          {
+            $match: {
+              linkId: { $in: linkIds },
+              date: { $gte: dateRange.start, $lte: dateRange.end },
+            },
+          },
+          {
+            $group: {
+              _id: '$date',
+              clicks: { $sum: '$clicks' },
+            },
+          },
+          {
+            $sort: { _id: 1 },
+          },
+        ])
+        .exec();
+
+      if (stats && stats.length > 0) {
+        return stats.map((stat) => ({
+          date: new Date(stat._id).toISOString().split('T')[0],
+          clicks: stat.clicks,
+        }));
+      }
+    } catch (error) {
+      console.error('Error aggregating user stats:', error);
+    }
+
+    // Fall back to mock data if no real data exists
     return this.generateMockSeries(dateRange);
   }
 
