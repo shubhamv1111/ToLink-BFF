@@ -54,3 +54,10 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Project docs and summaries
+*_SUMMARY.md
+*_REPORT.md
+*_TODO.md
+IMPLEMENTATION_*.md
+Plan.md
