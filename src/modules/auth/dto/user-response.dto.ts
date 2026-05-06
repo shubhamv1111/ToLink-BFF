@@ -56,6 +56,18 @@ export class UserResponseDto {
     required: false,
   })
   lastLogin?: Date;
+
+  @ApiProperty({
+    description: 'Whether the account was created via Google OAuth',
+    example: false,
+  })
+  isGoogleAccount: boolean;
+
+  @ApiProperty({
+    description: 'Whether the account has a password set (Google users may not)',
+    example: true,
+  })
+  hasPassword: boolean;
 }
 
 export class AuthResponseDto {

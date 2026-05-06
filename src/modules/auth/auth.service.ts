@@ -91,6 +91,13 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
+    // Google-only account — no password has been set
+    if (!user.passwordHash && user.googleId) {
+      throw new UnauthorizedException(
+        'This account uses Google Sign-In. Please continue with Google or set a password first.',
+      );
+    }
+
     // Verify password
     if (
       !user.passwordHash ||
@@ -211,11 +218,14 @@ export class AuthService {
       id: user._id as string,
       name: user.name,
       email: user.email,
+      profilePhoto: user.profilePhoto,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       isActive: user.isActive,
       createdAt: user.createdAt,
       lastLogin: user.lastLogin,
+      isGoogleAccount: !!user.googleId,
+      hasPassword: !!user.passwordHash,
     };
   }
 
