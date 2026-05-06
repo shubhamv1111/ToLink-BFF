@@ -10,10 +10,6 @@ import {
 import {
   AnalyticsOverviewDto,
   AnalyticsQueryDto,
-  DeviceBreakdownDto,
-  ReferrerDto,
-  CountryDto,
-  StatsDto,
 } from './dto/analytics-overview.dto';
 import {
   ClicksSeriesDto,
@@ -25,6 +21,14 @@ import {
   ClicksPerUrlQueryDto,
 } from './dto/clicks-per-url.dto';
 
+const DEVICE_COLORS: Record<string, string> = {
+  desktop: '#3B82F6',
+  mobile: '#10B981',
+  tablet: '#F59E0B',
+  bot: '#8B5CF6',
+  unknown: '#6B7280',
+};
+
 @Injectable()
 export class AnalyticsService {
   constructor(
@@ -35,45 +39,161 @@ export class AnalyticsService {
   ) {}
 
   /**
-   * Get analytics overview with device, referrer, country breakdown and stats
+   * Get analytics overview with real device, referrer, country breakdown
    */
   async getOverview(
     userId: string,
     query: AnalyticsQueryDto,
   ): Promise<AnalyticsOverviewDto> {
     const { scope = 'user', linkId, range = '30d' } = query;
-
-    // Build date range
     const dateRange = this.getDateRange(range);
 
-    // Build link criteria
+    // Resolve link IDs for this user/scope
     const linkCriteria = this.buildLinkCriteria(scope, userId, linkId);
-
-    // Get user's link IDs for the scope
     const userLinks = await this.urlModel
       .find(linkCriteria)
       .select('_id clicks')
       .exec();
-    const linkIds = userLinks.map((link) => link._id);
 
-    if (linkIds.length === 0) {
+    if (userLinks.length === 0) {
       return this.getEmptyOverview();
     }
 
-    // Calculate real stats from user's links
-    const totalClicks = userLinks.reduce(
-      (sum, link) => sum + (link.clicks || 0),
-      0,
-    );
+    const linkIds = userLinks.map((l) => l._id);
+    const totalClicks = userLinks.reduce((s, l) => s + (l.clicks || 0), 0);
     const totalLinks = userLinks.length;
 
-    // TODO: When clicks collection is populated, query real analytics data:
-    // const deviceBreakdown = await this.getDeviceBreakdown(linkIds, dateRange);
-    // const referrers = await this.getReferrerStats(linkIds, dateRange);
-    // const countries = await this.getCountryStats(linkIds, dateRange);
+    // Base match for clicks within date range for these links
+    const clicksMatch = {
+      linkId: { $in: linkIds },
+      ts: { $gte: dateRange.start, $lte: dateRange.end },
+    };
 
-    // For now, return enhanced mock data based on actual link counts
-    return this.getEnhancedMockData(totalClicks, totalLinks);
+    // Device breakdown from real clicks
+    const deviceAgg = await this.clicksModel
+      .aggregate([
+        { $match: clicksMatch },
+        { $group: { _id: '$deviceType', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ])
+      .exec();
+
+    const deviceBreakdown = deviceAgg.map((d) => ({
+      name:
+        d._id.charAt(0).toUpperCase() + d._id.slice(1),
+      value: d.count,
+      color: DEVICE_COLORS[d._id] || '#6B7280',
+    }));
+
+    // Referrer breakdown
+    const referrerAgg = await this.clicksModel
+      .aggregate([
+        { $match: clicksMatch },
+        {
+          $group: {
+            _id: { $ifNull: ['$referrer', 'Direct'] },
+            clicks: { $sum: 1 },
+          },
+        },
+        { $sort: { clicks: -1 } },
+        { $limit: 10 },
+      ])
+      .exec();
+
+    const referrers = referrerAgg.map((r) => ({
+      source: r._id || 'Direct',
+      clicks: r.clicks,
+    }));
+
+    // Country breakdown with cities
+    const countryAgg = await this.clicksModel
+      .aggregate([
+        { $match: { ...clicksMatch, country: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: { country: '$country', city: { $ifNull: ['$city', 'Unknown'] } },
+            clicks: { $sum: 1 },
+          },
+        },
+        { $sort: { clicks: -1 } },
+      ])
+      .exec();
+
+    // Roll up country totals and nested cities
+    const countryMap = new Map<
+      string,
+      { clicks: number; cities: Map<string, number> }
+    >();
+    for (const row of countryAgg) {
+      const country = row._id.country as string;
+      const city = row._id.city as string;
+      if (!countryMap.has(country)) {
+        countryMap.set(country, { clicks: 0, cities: new Map() });
+      }
+      const entry = countryMap.get(country)!;
+      entry.clicks += row.clicks;
+      entry.cities.set(city, (entry.cities.get(city) || 0) + row.clicks);
+    }
+
+    const totalCountryClicks = Array.from(countryMap.values()).reduce(
+      (s, c) => s + c.clicks,
+      0,
+    );
+
+    const countries = Array.from(countryMap.entries())
+      .sort((a, b) => b[1].clicks - a[1].clicks)
+      .slice(0, 10)
+      .map(([country, data]) => ({
+        country,
+        clicks: data.clicks,
+        percentage:
+          totalCountryClicks > 0
+            ? Math.round((data.clicks / totalCountryClicks) * 100)
+            : 0,
+        cities: Array.from(data.cities.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([city, clicks]) => ({ city, clicks })),
+      }));
+
+    // Period-over-period change for total clicks
+    const halfRange = this.getHalfDateRange(range);
+    const prevMatch = {
+      linkId: { $in: linkIds },
+      ts: { $gte: halfRange.prevStart, $lte: halfRange.prevEnd },
+    };
+    const currMatch = {
+      linkId: { $in: linkIds },
+      ts: { $gte: halfRange.currStart, $lte: halfRange.currEnd },
+    };
+
+    const [prevCount, currCount] = await Promise.all([
+      this.clicksModel.countDocuments(prevMatch).exec(),
+      this.clicksModel.countDocuments(currMatch).exec(),
+    ]);
+
+    const clickTrend = this.computeTrend(prevCount, currCount);
+
+    return {
+      deviceBreakdown,
+      referrers: referrers.length > 0 ? referrers : [{ source: 'Direct', clicks: 0 }],
+      countries,
+      stats: {
+        clickRate:
+          totalLinks > 0 ? `${(totalClicks / totalLinks).toFixed(1)}` : '0',
+        uniqueVisitorsRatio: 0.75,
+        changes: {
+          totalClicks: clickTrend.label,
+          totalClicksTrend: clickTrend.direction,
+          uniqueVisitors: clickTrend.label,
+          uniqueVisitorsTrend: clickTrend.direction,
+          clickRate: clickTrend.label,
+          clickRateTrend: clickTrend.direction,
+          avgDailyClicks: clickTrend.label,
+          avgDailyClicksTrend: clickTrend.direction,
+        },
+      },
+    };
   }
 
   /**
@@ -83,25 +203,13 @@ export class AnalyticsService {
     userId: string,
     query: ClicksSeriesQueryDto,
   ): Promise<ClicksSeriesDto> {
-    const {
-      scope = 'user',
-      linkId,
-      granularity = 'day',
-      range = '30d',
-    } = query;
-
-    // Build date range
+    const { scope = 'user', linkId, range = '30d' } = query;
     const dateRange = this.getDateRange(range);
 
-    // Build link criteria
-    const linkCriteria = this.buildLinkCriteria(scope, userId, linkId);
-
     if (scope === 'link' && linkId) {
-      // Get single link series
       const series = await this.getLinkClicksSeries(linkId, dateRange);
       return { series };
     } else {
-      // Get user aggregate series
       const series = await this.getUserClicksSeries(userId, dateRange);
       return { series };
     }
@@ -115,49 +223,37 @@ export class AnalyticsService {
     query: ClicksPerUrlQueryDto,
   ): Promise<ClicksPerUrlDto> {
     const { range = '30d' } = query;
-
-    // Build date range
     const dateRange = this.getDateRange(range);
 
-    // Get user's links
     const userLinks = await this.urlModel.find({ userId }).select('_id').exec();
     const perUrl: Record<string, ClickSeriesDataPointDto[]> = {};
 
-    // Get series for each link
     for (const link of userLinks) {
       const linkId = (link._id as any).toString();
-      const series = await this.getLinkClicksSeries(linkId, dateRange);
-      perUrl[linkId] = series;
+      perUrl[linkId] = await this.getLinkClicksSeries(linkId, dateRange);
     }
 
     return { perUrl };
   }
 
   /**
-   * Get clicks series for a single link
+   * Get clicks series for a single link from daily_link_stats
    */
   private async getLinkClicksSeries(
     linkId: string,
     dateRange: { start: Date; end: Date },
   ): Promise<ClickSeriesDataPointDto[]> {
-    // Try to get real data from daily stats
     try {
       const startStr = dateRange.start.toISOString().split('T')[0];
       const endStr = dateRange.end.toISOString().split('T')[0];
 
       const stats = await this.dailyStatsModel
-        .find({
-          linkId,
-          date: { $gte: startStr, $lte: endStr },
-        })
+        .find({ linkId, date: { $gte: startStr, $lte: endStr } })
         .sort({ date: 1 })
         .exec();
 
-      if (stats && stats.length > 0) {
-        return stats.map((stat) => ({
-          date: stat.date,
-          clicks: stat.clicks,
-        }));
+      if (stats.length > 0) {
+        return stats.map((s) => ({ date: s.date, clicks: s.clicks }));
       }
     } catch (error) {
       console.error('Error fetching daily stats:', error);
@@ -173,22 +269,18 @@ export class AnalyticsService {
     userId: string,
     dateRange: { start: Date; end: Date },
   ): Promise<ClickSeriesDataPointDto[]> {
-    // Get all user links
     const userLinks = await this.urlModel
       .find({ userId })
       .select('_id')
       .exec();
-    const linkIds = userLinks.map((link) => link._id);
+    const linkIds = userLinks.map((l) => l._id);
 
-    if (linkIds.length === 0) {
-      return [];
-    }
+    if (linkIds.length === 0) return [];
 
     try {
       const startStr = dateRange.start.toISOString().split('T')[0];
       const endStr = dateRange.end.toISOString().split('T')[0];
 
-      // Aggregate daily stats across all user links
       const stats = await this.dailyStatsModel
         .aggregate([
           {
@@ -197,23 +289,13 @@ export class AnalyticsService {
               date: { $gte: startStr, $lte: endStr },
             },
           },
-          {
-            $group: {
-              _id: '$date',
-              clicks: { $sum: '$clicks' },
-            },
-          },
-          {
-            $sort: { _id: 1 },
-          },
+          { $group: { _id: '$date', clicks: { $sum: '$clicks' } } },
+          { $sort: { _id: 1 } },
         ])
         .exec();
 
-      if (stats && stats.length > 0) {
-        return stats.map((stat) => ({
-          date: stat._id,
-          clicks: stat.clicks,
-        }));
+      if (stats.length > 0) {
+        return stats.map((s) => ({ date: s._id, clicks: s.clicks }));
       }
     } catch (error) {
       console.error('Error aggregating user stats:', error);
@@ -222,27 +304,20 @@ export class AnalyticsService {
     return [];
   }
 
-  /**
-   * Build link criteria based on scope
-   */
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   private buildLinkCriteria(
     scope: string,
     userId: string,
     linkId?: string,
   ): any {
-    if (scope === 'link' && linkId) {
-      return { _id: linkId, userId };
-    }
+    if (scope === 'link' && linkId) return { _id: linkId, userId };
     return { userId };
   }
 
-  /**
-   * Get date range based on range parameter
-   */
   private getDateRange(range: string): { start: Date; end: Date } {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
-
     const start = new Date();
     switch (range) {
       case '7d':
@@ -255,47 +330,54 @@ export class AnalyticsService {
         start.setDate(start.getDate() - 90);
         break;
       case 'all':
-        start.setFullYear(2020); // Far back enough
+        start.setFullYear(2000);
         break;
       default:
         start.setDate(start.getDate() - 30);
     }
     start.setHours(0, 0, 0, 0);
-
     return { start, end };
   }
 
-  /**
-   * Generate mock series data for testing
-   */
-  private generateMockSeries(dateRange: {
-    start: Date;
-    end: Date;
-  }): ClickSeriesDataPointDto[] {
-    const series: ClickSeriesDataPointDto[] = [];
-    const currentDate = new Date(dateRange.start);
-
-    while (currentDate <= dateRange.end) {
-      series.push({
-        date: currentDate.toISOString().split('T')[0],
-        clicks: Math.floor(Math.random() * 50) + 1, // Random clicks 1-50
-      });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    return series;
+  /** Split the range into two halves for period-over-period comparison */
+  private getHalfDateRange(range: string): {
+    prevStart: Date;
+    prevEnd: Date;
+    currStart: Date;
+    currEnd: Date;
+  } {
+    const days =
+      range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 30;
+    const now = new Date();
+    const currEnd = new Date(now);
+    const currStart = new Date(now);
+    currStart.setDate(currStart.getDate() - days);
+    const prevEnd = new Date(currStart);
+    const prevStart = new Date(currStart);
+    prevStart.setDate(prevStart.getDate() - days);
+    return { prevStart, prevEnd, currStart, currEnd };
   }
 
-  /**
-   * Get empty overview for when no data exists
-   */
+  private computeTrend(
+    prev: number,
+    curr: number,
+  ): { label: string; direction: 'up' | 'down' | 'neutral' } {
+    if (prev === 0 && curr === 0) return { label: '0%', direction: 'neutral' };
+    if (prev === 0) return { label: `+${curr * 100}%`, direction: 'up' };
+    const pct = Math.round(((curr - prev) / prev) * 100);
+    return {
+      label: pct >= 0 ? `+${pct}%` : `${pct}%`,
+      direction: pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral',
+    };
+  }
+
   private getEmptyOverview(): AnalyticsOverviewDto {
     return {
       deviceBreakdown: [],
-      referrers: [{ source: 'Direct', clicks: 0 }],
+      referrers: [],
       countries: [],
       stats: {
-        clickRate: '0.0%',
+        clickRate: '0',
         uniqueVisitorsRatio: 0,
         changes: {
           totalClicks: '0%',
@@ -309,79 +391,5 @@ export class AnalyticsService {
         },
       },
     };
-  }
-
-  /**
-   * Get enhanced mock data based on actual user stats
-   */
-  private getEnhancedMockData(
-    totalClicks: number,
-    totalLinks: number,
-  ): AnalyticsOverviewDto {
-    // Scale mock data based on actual clicks
-    const scaleFactor = Math.max(1, totalClicks / 100);
-    const desktopClicks = Math.round(45 * scaleFactor);
-    const mobileClicks = Math.round(35 * scaleFactor);
-    const tabletClicks = Math.round(20 * scaleFactor);
-
-    return {
-      deviceBreakdown: [
-        { name: 'Desktop', value: desktopClicks, color: '#3B82F6' },
-        { name: 'Mobile', value: mobileClicks, color: '#10B981' },
-        { name: 'Tablet', value: tabletClicks, color: '#F59E0B' },
-      ],
-      referrers: [
-        { source: 'Direct', clicks: Math.round(180 * scaleFactor) },
-        { source: 'Google', clicks: Math.round(120 * scaleFactor) },
-        { source: 'Social Media', clicks: Math.round(85 * scaleFactor) },
-        { source: 'Email', clicks: Math.round(45 * scaleFactor) },
-      ],
-      countries: [
-        {
-          country: 'United States',
-          clicks: Math.round(234 * scaleFactor),
-          percentage: 45,
-          cities: [
-            { city: 'New York', clicks: Math.round(120 * scaleFactor) },
-            { city: 'Los Angeles', clicks: Math.round(78 * scaleFactor) },
-            { city: 'Chicago', clicks: Math.round(36 * scaleFactor) },
-          ],
-        },
-        {
-          country: 'United Kingdom',
-          clicks: Math.round(156 * scaleFactor),
-          percentage: 30,
-          cities: [
-            { city: 'London', clicks: Math.round(98 * scaleFactor) },
-            { city: 'Manchester', clicks: Math.round(35 * scaleFactor) },
-            { city: 'Birmingham', clicks: Math.round(23 * scaleFactor) },
-          ],
-        },
-      ],
-      stats: {
-        clickRate:
-          totalLinks > 0
-            ? `${((totalClicks / totalLinks) * 100).toFixed(1)}%`
-            : '0%',
-        uniqueVisitorsRatio: 0.75,
-        changes: {
-          totalClicks: totalClicks > 50 ? '+12%' : '+5%',
-          totalClicksTrend: 'up',
-          uniqueVisitors: '+8%',
-          uniqueVisitorsTrend: 'up',
-          clickRate: totalClicks > 100 ? '+15%' : '-2%',
-          clickRateTrend: totalClicks > 100 ? 'up' : 'down',
-          avgDailyClicks: '+15%',
-          avgDailyClicksTrend: 'up',
-        },
-      },
-    };
-  }
-
-  /**
-   * Get mock overview data for testing (fallback)
-   */
-  private getMockOverviewData(): AnalyticsOverviewDto {
-    return this.getEnhancedMockData(100, 5);
   }
 }
