@@ -1,5 +1,10 @@
 import { setDefaultResultOrder } from 'dns';
+import * as https from 'https';
 setDefaultResultOrder('ipv4first');
+// Force IPv4 for all outgoing HTTPS connections; prevents ETIMEDOUT on IPv6
+// when passport-oauth2 exchanges the authorization code for an access token.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(https as any).globalAgent = new https.Agent({ family: 4 });
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, RequestMethod } from '@nestjs/common';
