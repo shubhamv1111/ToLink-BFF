@@ -812,16 +812,11 @@ export class UrlsService {
     else if (url.hasPassword) {
       status = 'password_required';
     }
-    // Check if private (requires auth)
-    else if (url.isPrivate) {
-      status = 'auth_required';
-    }
 
     return {
       shortCode: url.shortCode,
       status,
       hasPassword: url.hasPassword || false,
-      isPrivate: url.isPrivate || false,
       activationAt: url.activationAt?.toISOString() || null,
       expiresAt: url.expiresAt?.toISOString() || null,
       urlName: url.urlName || null,
@@ -856,13 +851,6 @@ export class UrlsService {
     // Check expiration
     if (url.expiresAt && url.expiresAt < now) {
       throw new ConflictException('Link has expired');
-    }
-
-    // Check if private link requires authentication
-    if (url.isPrivate && !userId) {
-      throw new UnauthorizedException(
-        'Authentication required for private link',
-      );
     }
 
     // Check password if required

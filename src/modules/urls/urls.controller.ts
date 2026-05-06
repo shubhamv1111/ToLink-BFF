@@ -769,15 +769,6 @@ export class RedirectController {
             );
           break;
 
-        case 'auth_required':
-          // Redirect to login/authentication page
-          res
-            .status(HttpStatus.FOUND)
-            .redirect(
-              `${frontendUrl}/login?redirect=/r/${shortCode}&status=auth_required`,
-            );
-          break;
-
         case 'not_activated':
           // Redirect to info page showing activation time
           res
