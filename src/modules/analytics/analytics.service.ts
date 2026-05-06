@@ -142,10 +142,13 @@ export class AnalyticsService {
   ): Promise<ClickSeriesDataPointDto[]> {
     // Try to get real data from daily stats
     try {
+      const startStr = dateRange.start.toISOString().split('T')[0];
+      const endStr = dateRange.end.toISOString().split('T')[0];
+
       const stats = await this.dailyStatsModel
         .find({
           linkId,
-          date: { $gte: dateRange.start, $lte: dateRange.end },
+          date: { $gte: startStr, $lte: endStr },
         })
         .sort({ date: 1 })
         .exec();
@@ -160,8 +163,7 @@ export class AnalyticsService {
       console.error('Error fetching daily stats:', error);
     }
 
-    // Fall back to mock data if no real data exists
-    return this.generateMockSeries(dateRange);
+    return [];
   }
 
   /**
@@ -183,13 +185,16 @@ export class AnalyticsService {
     }
 
     try {
+      const startStr = dateRange.start.toISOString().split('T')[0];
+      const endStr = dateRange.end.toISOString().split('T')[0];
+
       // Aggregate daily stats across all user links
       const stats = await this.dailyStatsModel
         .aggregate([
           {
             $match: {
               linkId: { $in: linkIds },
-              date: { $gte: dateRange.start, $lte: dateRange.end },
+              date: { $gte: startStr, $lte: endStr },
             },
           },
           {
@@ -206,7 +211,7 @@ export class AnalyticsService {
 
       if (stats && stats.length > 0) {
         return stats.map((stat) => ({
-          date: new Date(stat._id).toISOString().split('T')[0],
+          date: stat._id,
           clicks: stat.clicks,
         }));
       }
@@ -214,8 +219,7 @@ export class AnalyticsService {
       console.error('Error aggregating user stats:', error);
     }
 
-    // Fall back to mock data if no real data exists
-    return this.generateMockSeries(dateRange);
+    return [];
   }
 
   /**

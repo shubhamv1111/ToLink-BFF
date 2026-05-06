@@ -754,7 +754,7 @@ export class UrlsService {
       id: url._id as string,
       originalUrl: url.originalUrl,
       shortCode: url.shortCode,
-      shortUrl: `${process.env.BASE_URL || 'http://localhost:8080'}/r/${url.shortCode}`,
+      shortUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/${url.shortCode}`,
       clicks: url.clicks || 0,
       createdAt: url.createdAt.toISOString(),
       lastClicked: url.lastClicked?.toISOString(),
@@ -990,7 +990,8 @@ export class UrlsService {
       const clickData = {
         linkId: url._id,
         ts: new Date(),
-        ip: locationInfo.ip,
+        ip: locationInfo.ip || 'unknown',
+        userAgent: userAgent || 'unknown',
         country: locationInfo.country,
         city: locationInfo.city,
         referrer,
@@ -1025,8 +1026,7 @@ export class UrlsService {
    */
   private async updateDailyStats(linkId: any, clickDate: Date): Promise<void> {
     try {
-      const dateStr = clickDate.toISOString().split('T')[0];
-      const date = new Date(dateStr);
+      const date = clickDate.toISOString().split('T')[0]; // YYYY-MM-DD string
 
       // Upsert daily stats (increment clicks or create new record)
       await this.dailyStatsModel.updateOne(
