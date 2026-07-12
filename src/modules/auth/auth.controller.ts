@@ -47,7 +47,7 @@ export class AuthController {
     res.cookie('tolink_session', token, {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: maxAgeMs,
     });
@@ -103,12 +103,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout user' })
   @ApiResponse({ status: 204, description: 'Logged out successfully' })
   async logout(@Res({ passthrough: true }) res: Response): Promise<void> {
+    const isProd =
+      this.configService.get<string>('NODE_ENV') === 'production' ||
+      this.configService.get<string>('environment') === 'production';
     res.cookie('tolink_session', '', {
       httpOnly: true,
-      secure:
-        this.configService.get<string>('NODE_ENV') === 'production' ||
-        this.configService.get<string>('environment') === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 0,
     });
