@@ -1,98 +1,197 @@
+# ToLink Backend
+
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <img src="https://nestjs.com/img/logo-small.svg" width="80" alt="NestJS" />
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+<p align="center">
+  REST API for the <strong>ToLink URL Shortener</strong> — built with NestJS, MongoDB, and TypeScript.
 </p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+| Layer | Technology |
+|---|---|
+| Framework | NestJS 11 |
+| Language | TypeScript 5 |
+| Database | MongoDB via Mongoose 8 |
+| Auth | JWT (httpOnly cookie) + Google OAuth 2.0 |
+| Validation | class-validator + class-transformer |
+| Docs | Swagger / OpenAPI |
+| Email | Nodemailer (Gmail SMTP) |
+| Security | Helmet, @nestjs/throttler |
+| Analytics | geoip-lite, ua-parser-js |
 
-```bash
-$ npm install
+---
+
+## Features
+
+- **URL Shortening** — Base62 short-code generation with collision handling
+- **Custom Aliases** — User-defined short codes
+- **Password-Protected Links** — bcrypt-hashed access control
+- **Link Expiry** — Optional expiration date per URL
+- **Click Analytics** — Per-click tracking: country, device, browser, OS, referrer
+- **Analytics Overview** — Aggregated stats: total clicks, top countries, top referrers, click series
+- **QR Code Support** — QR endpoints for any shortened link
+- **Authentication** — Email/password signup + Google OAuth, session via httpOnly cookies
+- **Email Verification** — Account activation flow via Nodemailer
+- **Password Reset** — Secure token-based password reset emails
+- **Rate Limiting** — Request throttling via @nestjs/throttler
+- **Swagger UI** — Full API documentation at `/swagger`
+
+---
+
+## Project Structure
+
+```
+src/
+├── config/                  # App configuration (ConfigModule)
+├── modules/
+│   ├── auth/                # Auth: signup, login, Google OAuth, JWT strategy
+│   ├── urls/                # URL CRUD, short-code generation, redirection
+│   ├── analytics/           # Click tracking and stats aggregation
+│   ├── users/               # User profile management
+│   ├── email/               # Nodemailer email service
+│   └── qr/                  # QR code generation
+├── schemas/                 # Mongoose schemas (User, Url, Analytics, DailyLinkStats)
+├── utils/                   # Helpers: base62, cache, analytics
+├── app.module.ts
+└── main.ts
 ```
 
-## Compile and run the project
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js >= 18
+- npm >= 9
+- A running MongoDB instance (local or Atlas)
+
+### 1. Install dependencies
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+### 2. Configure environment
+
+Create a `.env` file in the project root based on the variables below:
+
+```env
+# Database
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/tolink
+
+# JWT
+JWT_SECRET=your-super-secret-key
+JWT_EXPIRES_IN=7d
+
+# App
+PORT=8080
+BASE_URL=http://localhost:8080
+FRONTEND_URL=http://localhost:4000
+
+# Email (Gmail SMTP)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:8080/v1/auth/google/callback
+```
+
+> **Note:** For Gmail, use an [App Password](https://myaccount.google.com/apppasswords), not your account password.
+
+### 3. Run the server
 
 ```bash
-# unit tests
-$ npm run test
+# Development (watch mode)
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Production build
+npm run build
+npm run start:prod
 ```
 
-## Deployment
+The API will be available at `http://localhost:8080`.  
+Swagger docs at `http://localhost:8080/swagger`.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## API Overview
+
+All routes are prefixed with `/v1` except the public redirection endpoint.
+
+### Auth — `/v1/auth`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/signup` | Register a new user |
+| POST | `/login` | Login and set session cookie |
+| POST | `/logout` | Clear session cookie |
+| GET | `/me` | Get current authenticated user |
+| PUT | `/profile` | Update profile (name, etc.) |
+| PUT | `/change-password` | Change account password |
+| GET | `/google` | Initiate Google OAuth flow |
+| GET | `/google/callback` | Google OAuth callback |
+| POST | `/forgot-password` | Send password reset email |
+| POST | `/reset-password` | Reset password via token |
+
+### URLs — `/v1/urls`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/` | Create a shortened URL |
+| GET | `/` | List current user's URLs |
+| GET | `/:id` | Get a single URL by ID |
+| PATCH | `/:id` | Update a URL |
+| DELETE | `/:id` | Delete a URL |
+
+### Redirection — `/r/:shortCode`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/r/:shortCode` | Redirect to original URL (tracks click) |
+
+### Analytics — `/v1/analytics`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/overview` | Aggregated stats for all user links |
+| GET | `/clicks-per-url` | Click count per URL |
+| GET | `/clicks-series` | Click count over time |
+
+---
+
+## Scripts
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run start:dev    # Start in watch mode
+npm run build        # Compile TypeScript
+npm run start:prod   # Run compiled output
+npm run lint         # ESLint with auto-fix
+npm run format       # Prettier format
+npm run test         # Unit tests
+npm run test:e2e     # End-to-end tests
+npm run test:cov     # Coverage report
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## Authentication
 
-Check out a few resources that may come in handy when working with NestJS:
+Sessions are handled via **httpOnly cookies** (`tolink_session`).  
+The cookie is set on login/signup and cleared on logout.  
+Protected routes require the `JwtAuthGuard`. Some endpoints use `OptionalJwtAuthGuard` to allow both authenticated and anonymous access.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is **UNLICENSED** — private use only.
