@@ -43,7 +43,7 @@ class RedirectResponseDto {
     example: 'https://www.google.com',
     description: 'Original URL that the short code redirects to',
   })
-  originalUrl: string;
+  originalUrl!: string;
 }
 
 class ErrorResponseDto {
@@ -51,19 +51,19 @@ class ErrorResponseDto {
     example: 400,
     description: 'HTTP status code',
   })
-  statusCode: number;
+  statusCode!: number;
 
   @ApiProperty({
     example: 'Invalid URL format',
     description: 'Error message',
   })
-  message: string;
+  message!: string;
 
   @ApiProperty({
     example: 'Bad Request',
     description: 'HTTP status text',
   })
-  error: string;
+  error!: string;
 }
 
 @ApiTags('URLs')
@@ -761,37 +761,35 @@ export class RedirectController {
           break;
 
         case 'password_required':
-          // Redirect to password entry page
-          res
-            .status(HttpStatus.FOUND)
-            .redirect(
-              `${frontendUrl}/link/${shortCode}?status=password_required`,
-            );
+          res.status(HttpStatus.FOUND).redirect(`${frontendUrl}/${shortCode}`);
           break;
 
         case 'not_activated':
-          // Redirect to info page showing activation time
           res
             .status(HttpStatus.FOUND)
             .redirect(
-              `${frontendUrl}/link/${shortCode}?status=not_activated&activationAt=${metadata.activationAt}`,
+              `${frontendUrl}/not-activated?code=${encodeURIComponent(shortCode)}${
+                metadata.activationAt
+                  ? `&at=${encodeURIComponent(metadata.activationAt)}`
+                  : ''
+              }`,
             );
           break;
 
         case 'expired':
-          // Redirect to info page showing expiration
           res
             .status(HttpStatus.FOUND)
             .redirect(
-              `${frontendUrl}/link/${shortCode}?status=expired&expiredAt=${metadata.expiresAt}`,
+              `${frontendUrl}/expired?code=${encodeURIComponent(shortCode)}${
+                metadata.expiresAt
+                  ? `&exp=${encodeURIComponent(metadata.expiresAt)}`
+                  : ''
+              }`,
             );
           break;
 
         case 'disabled':
-          // Redirect to info page showing link is disabled
-          res
-            .status(HttpStatus.FOUND)
-            .redirect(`${frontendUrl}/link/${shortCode}?status=disabled`);
+          res.status(HttpStatus.FOUND).redirect(`${frontendUrl}/${shortCode}`);
           break;
 
         case 'not_found':
