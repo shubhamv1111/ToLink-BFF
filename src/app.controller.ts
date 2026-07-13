@@ -13,4 +13,17 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+
+  @Get('health')
+  @ApiOperation({
+    summary: 'Health check',
+    description: 'Lightweight liveness probe for uptime monitors and frontend keep-alive pings',
+  })
+  @ApiResponse({ status: 200, description: 'Service is up' })
+  getHealth(): { status: string; timestamp: string } {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
