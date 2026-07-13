@@ -585,10 +585,18 @@ export class UrlsService {
     }
 
     // Handle password update
-    if (updateDto.hasPassword && updateDto.password) {
-      const saltRounds = 12;
-      url.passwordHash = await bcrypt.hash(updateDto.password, saltRounds);
+    if (updateDto.hasPassword === true) {
+      if (updateDto.password) {
+        const saltRounds = 12;
+        url.passwordHash = await bcrypt.hash(updateDto.password, saltRounds);
+      } else if (!url.passwordHash) {
+        throw new BadRequestException(
+          'Password is required when enabling password protection',
+        );
+      }
+      url.hasPassword = true;
     } else if (updateDto.hasPassword === false) {
+      url.hasPassword = false;
       url.passwordHash = undefined;
     }
 
@@ -759,7 +767,7 @@ export class UrlsService {
       createdAt: url.createdAt.toISOString(),
       lastClicked: url.lastClicked?.toISOString(),
       isPrivate: url.isPrivate || false,
-      hasPassword: url.hasPassword || false,
+      hasPassword: url.hasPassword || !!url.passwordHash,
       urlName: url.urlName,
       activationAt: url.activationAt?.toISOString(),
       expiresAt: url.expiresAt?.toISOString(),
@@ -809,14 +817,14 @@ export class UrlsService {
       status = 'expired';
     }
     // Check if password required
-    else if (url.hasPassword) {
+    else if (url.hasPassword || url.passwordHash) {
       status = 'password_required';
     }
 
     return {
       shortCode: url.shortCode,
       status,
-      hasPassword: url.hasPassword || false,
+      hasPassword: url.hasPassword || !!url.passwordHash,
       activationAt: url.activationAt?.toISOString() || null,
       expiresAt: url.expiresAt?.toISOString() || null,
       urlName: url.urlName || null,
@@ -854,7 +862,10 @@ export class UrlsService {
     }
 
     // Check password if required
-    if (url.hasPassword && url.passwordHash) {
+    if (url.hasPassword || url.passwordHash) {
+      if (!url.passwordHash) {
+        throw new ConflictException('Link password configuration is invalid');
+      }
       if (!password) {
         throw new UnauthorizedException('Password required');
       }

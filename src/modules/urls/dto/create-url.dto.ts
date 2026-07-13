@@ -7,7 +7,11 @@ import {
   Length,
   Matches,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+const emptyStringToUndefined = ({ value }: { value: unknown }) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
 
 export class CreateUrlDto {
   @ApiProperty({
@@ -23,6 +27,7 @@ export class CreateUrlDto {
     maxLength: 100,
   })
   @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
   @Length(1, 100, {
     message: 'URL name must be between 1 and 100 characters',
@@ -37,6 +42,7 @@ export class CreateUrlDto {
     maxLength: 32,
   })
   @IsOptional()
+  @Transform(emptyStringToUndefined)
   @IsString()
   @Length(3, 32, {
     message: 'Custom alias must be between 3 and 32 characters',
