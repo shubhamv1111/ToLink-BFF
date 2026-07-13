@@ -21,6 +21,7 @@ import { UpdateLinkDto } from './dto/update-link.dto';
 import { LinkListResponseDto, LinkListQueryDto } from './dto/link-list.dto';
 import { Base62Util } from '../../utils/base62.util';
 import { InMemoryCache } from '../../utils/cache.util';
+import { AnalyticsUtil } from '../../utils/analytics.util';
 
 @Injectable()
 export class UrlsService {
@@ -170,7 +171,7 @@ export class UrlsService {
   /**
    * Find URL by short code with caching
    */
-  async findByShortCode(shortCode: string): Promise<Url | null> {
+  async findByShortCode(shortCode: string): Promise<UrlDocument | null> {
     // Check cache first
     const cached = this.cache.get(shortCode);
     if (cached) {
@@ -207,17 +208,11 @@ export class UrlsService {
       throw new NotFoundException('Short URL not found');
     }
 
-    // Record analytics if request is provided (don't await to minimize redirect latency)
     if (req) {
-      this.recordClick(url, req).catch((error) =>
-        console.error('Error recording click analytics:', error),
-      );
+      await this.trackClick(url, req);
+    } else {
+      await this.incrementClickCount(shortCode);
     }
-
-    // Increment click count asynchronously (don't wait for it)
-    this.incrementClickCount(shortCode).catch((error) => {
-      console.error('Failed to increment click count:', error);
-    });
 
     return url.originalUrl;
   }
@@ -916,22 +911,7 @@ export class UrlsService {
       throw new ConflictException('Link is no longer accessible');
     }
 
-    // Record click analytics
-    await this.recordClick(url, req);
-
-    // Increment click count
-    await this.urlModel
-      .updateOne(
-        { _id: url._id },
-        {
-          $inc: { clicks: 1 },
-          $set: {
-            lastClicked: new Date(),
-            updatedAt: new Date(),
-          },
-        },
-      )
-      .exec();
+    await this.trackClick(url, req);
 
     return url.originalUrl;
   }
@@ -970,13 +950,37 @@ export class UrlsService {
   }
 
   /**
+   * Persist click counter and detailed analytics together
+   */
+  private async trackClick(url: UrlDocument, req: any): Promise<void> {
+    await Promise.all([
+      this.recordClick(url, req),
+      this.urlModel
+        .updateOne(
+          { _id: url._id },
+          {
+            $inc: { clicks: 1 },
+            $set: {
+              lastClicked: new Date(),
+              updatedAt: new Date(),
+            },
+          },
+        )
+        .exec(),
+    ]);
+
+    const cached = this.cache.get(url.shortCode);
+    if (cached) {
+      cached.clicks += 1;
+      this.cache.set(url.shortCode, cached);
+    }
+  }
+
+  /**
    * Record detailed click analytics
    */
-  private async recordClick(url: any, req: any): Promise<void> {
+  private async recordClick(url: UrlDocument, req: any): Promise<void> {
     try {
-      // Import analytics utilities dynamically to avoid circular dependencies
-      const { AnalyticsUtil } = await import('../../utils/analytics.util');
-
       // Extract device and location information
       const userAgent = req.headers['user-agent'] || '';
       const deviceInfo = AnalyticsUtil.parseDeviceInfo(userAgent);

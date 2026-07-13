@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Url, UrlDocument } from '../../schemas/url.schema';
 import { Clicks, ClicksDocument } from '../../schemas/analytics.schema';
 import {
@@ -20,6 +20,7 @@ import {
   ClicksPerUrlDto,
   ClicksPerUrlQueryDto,
 } from './dto/clicks-per-url.dto';
+import { AnalyticsUtil } from '../../utils/analytics.util';
 
 const DEVICE_COLORS: Record<string, string> = {
   desktop: '#3B82F6',
@@ -60,7 +61,7 @@ export class AnalyticsService {
     }
 
     const linkIds = userLinks.map((l) => l._id);
-    const totalClicks = userLinks.reduce((s, l) => s + (l.clicks || 0), 0);
+    const urlClicksTotal = userLinks.reduce((s, l) => s + (l.clicks || 0), 0);
     const totalLinks = userLinks.length;
 
     // Base match for clicks within date range for these links
@@ -68,6 +69,19 @@ export class AnalyticsService {
       linkId: { $in: linkIds },
       ts: { $gte: dateRange.start, $lte: dateRange.end },
     };
+
+    const [clicksInRange, uniqueVisitors] = await Promise.all([
+      this.clicksModel.countDocuments(clicksMatch).exec(),
+      this.clicksModel.distinct('ip', clicksMatch).exec(),
+    ]);
+
+    const totalClicks = clicksInRange > 0 ? clicksInRange : urlClicksTotal;
+    const uniqueVisitorCount = uniqueVisitors.filter(
+      (ip) => ip && ip !== 'unknown',
+    ).length;
+    const rangeDays = this.getRangeDayCount(range, dateRange);
+    const avgDailyClicks =
+      rangeDays > 0 ? Math.round(totalClicks / rangeDays) : 0;
 
     // Device breakdown from real clicks
     const deviceAgg = await this.clicksModel
@@ -125,7 +139,8 @@ export class AnalyticsService {
       { clicks: number; cities: Map<string, number> }
     >();
     for (const row of countryAgg) {
-      const country = row._id.country as string;
+      const countryCode = row._id.country as string;
+      const country = AnalyticsUtil.getCountryName(countryCode) ?? countryCode;
       const city = row._id.city as string;
       if (!countryMap.has(country)) {
         countryMap.set(country, { clicks: 0, cities: new Map() });
@@ -173,20 +188,28 @@ export class AnalyticsService {
     ]);
 
     const clickTrend = this.computeTrend(prevCount, currCount);
+    const uniqueTrend = this.computeTrend(
+      Math.max(1, Math.round(prevCount * 0.75)),
+      uniqueVisitorCount,
+    );
 
     return {
       deviceBreakdown,
       referrers: referrers.length > 0 ? referrers : [{ source: 'Direct', clicks: 0 }],
       countries,
       stats: {
+        totalClicks,
+        uniqueVisitors: uniqueVisitorCount,
+        avgDailyClicks,
         clickRate:
           totalLinks > 0 ? `${(totalClicks / totalLinks).toFixed(1)}` : '0',
-        uniqueVisitorsRatio: 0.75,
+        uniqueVisitorsRatio:
+          totalClicks > 0 ? uniqueVisitorCount / totalClicks : 0,
         changes: {
           totalClicks: clickTrend.label,
           totalClicksTrend: clickTrend.direction,
-          uniqueVisitors: clickTrend.label,
-          uniqueVisitorsTrend: clickTrend.direction,
+          uniqueVisitors: uniqueTrend.label,
+          uniqueVisitorsTrend: uniqueTrend.direction,
           clickRate: clickTrend.label,
           clickRateTrend: clickTrend.direction,
           avgDailyClicks: clickTrend.label,
@@ -244,19 +267,44 @@ export class AnalyticsService {
     dateRange: { start: Date; end: Date },
   ): Promise<ClickSeriesDataPointDto[]> {
     try {
+      const objectId = new Types.ObjectId(linkId);
       const startStr = dateRange.start.toISOString().split('T')[0];
       const endStr = dateRange.end.toISOString().split('T')[0];
 
       const stats = await this.dailyStatsModel
-        .find({ linkId, date: { $gte: startStr, $lte: endStr } })
+        .find({ linkId: objectId, date: { $gte: startStr, $lte: endStr } })
         .sort({ date: 1 })
         .exec();
 
       if (stats.length > 0) {
         return stats.map((s) => ({ date: s.date, clicks: s.clicks }));
       }
+
+      const clickSeries = await this.clicksModel
+        .aggregate([
+          {
+            $match: {
+              linkId: objectId,
+              ts: { $gte: dateRange.start, $lte: dateRange.end },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: { format: '%Y-%m-%d', date: '$ts' },
+              },
+              clicks: { $sum: 1 },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ])
+        .exec();
+
+      if (clickSeries.length > 0) {
+        return clickSeries.map((s) => ({ date: s._id, clicks: s.clicks }));
+      }
     } catch (error) {
-      console.error('Error fetching daily stats:', error);
+      console.error('Error fetching click series:', error);
     }
 
     return [];
@@ -297,6 +345,30 @@ export class AnalyticsService {
       if (stats.length > 0) {
         return stats.map((s) => ({ date: s._id, clicks: s.clicks }));
       }
+
+      const clickSeries = await this.clicksModel
+        .aggregate([
+          {
+            $match: {
+              linkId: { $in: linkIds },
+              ts: { $gte: dateRange.start, $lte: dateRange.end },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: { format: '%Y-%m-%d', date: '$ts' },
+              },
+              clicks: { $sum: 1 },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ])
+        .exec();
+
+      if (clickSeries.length > 0) {
+        return clickSeries.map((s) => ({ date: s._id, clicks: s.clicks }));
+      }
     } catch (error) {
       console.error('Error aggregating user stats:', error);
     }
@@ -313,6 +385,30 @@ export class AnalyticsService {
   ): any {
     if (scope === 'link' && linkId) return { _id: linkId, userId };
     return { userId };
+  }
+
+  private getRangeDayCount(
+    range: string,
+    dateRange: { start: Date; end: Date },
+  ): number {
+    switch (range) {
+      case '7d':
+        return 7;
+      case '30d':
+        return 30;
+      case '90d':
+        return 90;
+      case 'all':
+        return Math.max(
+          1,
+          Math.ceil(
+            (dateRange.end.getTime() - dateRange.start.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        );
+      default:
+        return 30;
+    }
   }
 
   private getDateRange(range: string): { start: Date; end: Date } {
@@ -377,6 +473,9 @@ export class AnalyticsService {
       referrers: [],
       countries: [],
       stats: {
+        totalClicks: 0,
+        uniqueVisitors: 0,
+        avgDailyClicks: 0,
         clickRate: '0',
         uniqueVisitorsRatio: 0,
         changes: {

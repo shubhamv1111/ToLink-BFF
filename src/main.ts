@@ -7,6 +7,7 @@ setDefaultResultOrder('ipv4first');
 (https as any).globalAgent = new https.Agent({ family: 4 });
 
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
@@ -14,14 +15,17 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Required behind Render/nginx so req.ip and geo analytics use the real client IP
+  app.set('trust proxy', 1);
 
   const configService = app.get(ConfigService);
 
   // Enable CORS for frontend
   app.enableCors({
     origin: [
-      configService.get<string>('frontendUrl'),
+      configService.get<string>('frontendUrl') ?? 'http://localhost:4000',
       'http://localhost:4000',
       'http://127.0.0.1:4000',
     ],

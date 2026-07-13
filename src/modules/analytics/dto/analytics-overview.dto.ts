@@ -85,6 +85,15 @@ export class StatsChangesDto {
 }
 
 export class StatsDto {
+  @ApiProperty({ description: 'Total clicks in selected range', example: 245 })
+  totalClicks: number;
+
+  @ApiProperty({ description: 'Unique visitors in selected range', example: 180 })
+  uniqueVisitors: number;
+
+  @ApiProperty({ description: 'Average daily clicks in selected range', example: 8 })
+  avgDailyClicks: number;
+
   @ApiProperty({ description: 'Click rate percentage', example: '3.0%' })
   clickRate: string;
 

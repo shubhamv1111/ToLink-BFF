@@ -54,13 +54,13 @@ export class AnalyticsUtil {
    * Extract location information from IP address
    */
   static parseLocationInfo(req: Request): LocationInfo {
-    // Get IP address from request
+    // Prefer proxy headers — Render/nginx set x-forwarded-for
     let ip =
-      req.ip ||
-      req.connection.remoteAddress ||
-      req.socket.remoteAddress ||
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
       (req.headers['x-real-ip'] as string) ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      req.connection?.remoteAddress ||
       'unknown';
 
     // Clean IPv6 prefix if present
@@ -166,6 +166,15 @@ export class AnalyticsUtil {
    */
   static formatDate(date: Date): string {
     return date.toISOString().split('T')[0];
+  }
+
+  static getCountryName(code?: string): string | undefined {
+    if (!code) return undefined;
+    try {
+      return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+    } catch {
+      return code;
+    }
   }
 
   /**
