@@ -56,6 +56,13 @@ export class UrlResponseDto {
   hasPassword: boolean;
 
   @ApiPropertyOptional({
+    description:
+      'The decrypted access password. Only returned to the link owner on authenticated routes.',
+    example: 'mySecret123',
+  })
+  password?: string;
+
+  @ApiPropertyOptional({
     description: 'Optional name/title for the link',
     example: 'My Important Link',
   })

@@ -34,7 +34,10 @@ export class Url {
   hasPassword: boolean;
 
   @Prop()
-  passwordHash?: string; // Bcrypt hashed password for protected links
+  passwordHash?: string; // Bcrypt hashed password for protected links (verification)
+
+  @Prop()
+  passwordEnc?: string; // AES-encrypted password for owner retrieval/display
 
   @Prop({ default: true })
   enabled: boolean;

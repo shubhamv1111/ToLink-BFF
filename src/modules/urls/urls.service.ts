@@ -22,6 +22,7 @@ import { LinkListResponseDto, LinkListQueryDto } from './dto/link-list.dto';
 import { Base62Util } from '../../utils/base62.util';
 import { InMemoryCache } from '../../utils/cache.util';
 import { AnalyticsUtil } from '../../utils/analytics.util';
+import { CryptoUtil } from '../../utils/crypto.util';
 
 @Injectable()
 export class UrlsService {
@@ -111,11 +112,13 @@ export class UrlsService {
       }
     }
 
-    // Hash password if provided
+    // Hash password for verification and keep a reversible copy for the owner
     let passwordHash: string | undefined;
+    let passwordEnc: string | undefined;
     if (hasPassword && password) {
       const saltRounds = 12;
       passwordHash = await bcrypt.hash(password, saltRounds);
+      passwordEnc = CryptoUtil.encrypt(password);
     }
 
     // Create new URL record
@@ -127,6 +130,7 @@ export class UrlsService {
       isPrivate: isPrivate || false,
       hasPassword: hasPassword || false,
       passwordHash,
+      passwordEnc,
       activationAt: activationAt ? new Date(activationAt) : undefined,
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       // Set TTL for anonymous links (30 days)
@@ -528,7 +532,7 @@ export class UrlsService {
     ]);
 
     return {
-      items: items.map((url) => this.transformToUrlResponse(url)),
+      items: items.map((url) => this.transformToOwnerResponse(url)),
       total,
     };
   }
@@ -541,7 +545,7 @@ export class UrlsService {
     if (!url) {
       throw new NotFoundException('Link not found or not owned by user');
     }
-    return this.transformToUrlResponse(url);
+    return this.transformToOwnerResponse(url);
   }
 
   /**
@@ -584,6 +588,7 @@ export class UrlsService {
       if (updateDto.password) {
         const saltRounds = 12;
         url.passwordHash = await bcrypt.hash(updateDto.password, saltRounds);
+        url.passwordEnc = CryptoUtil.encrypt(updateDto.password);
       } else if (!url.passwordHash) {
         throw new BadRequestException(
           'Password is required when enabling password protection',
@@ -593,6 +598,7 @@ export class UrlsService {
     } else if (updateDto.hasPassword === false) {
       url.hasPassword = false;
       url.passwordHash = undefined;
+      url.passwordEnc = undefined;
     }
 
     // Handle force activation
@@ -638,7 +644,7 @@ export class UrlsService {
     // Clear cache for this URL
     this.cache.delete(url.shortCode);
 
-    return this.transformToUrlResponse(url);
+    return this.transformToOwnerResponse(url);
   }
 
   /**
@@ -768,6 +774,21 @@ export class UrlsService {
       expiresAt: url.expiresAt?.toISOString(),
       enabled: url.enabled !== false,
     };
+  }
+
+  /**
+   * Transform for the link owner: includes the decrypted password so the owner
+   * can view/share it. Must only be used on authenticated, owner-scoped routes.
+   */
+  private transformToOwnerResponse(url: UrlDocument): UrlResponseDto {
+    const response = this.transformToUrlResponse(url);
+    if (url.passwordEnc) {
+      const decrypted = CryptoUtil.decrypt(url.passwordEnc);
+      if (decrypted !== undefined) {
+        response.password = decrypted;
+      }
+    }
+    return response;
   }
 
   /**
